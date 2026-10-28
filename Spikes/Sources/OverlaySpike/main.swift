@@ -79,7 +79,7 @@ final class RowsView: NSView {
             for slot in 0..<2 where circleRect(row: row, slot: slot).contains(p) {
                 marked[row][slot].toggle()
                 needsDisplay = true
-                log("CLICK circle row=\(row + 1) slot=\(slot + 1); frontmost=\(frontmostApp())")
+                log("CLICK circle row=\(row + 1) slot=\(slot + 1); frontmost=\(frontmostApp()) spikeActive=\(NSApp.isActive)")
                 return
             }
         }
@@ -100,6 +100,10 @@ let rowsView = RowsView(frame: NSRect(x: 0, y: 0, width: 220, height: 300))
 let panel = OverlayPanel(
     contentRect: rowsView.frame, styleMask: [.nonactivatingPanel, .borderless], backing: .buffered, defer: false)
 panel.contentView = rowsView
+// AppKit quirk: .nonactivatingPanel passed to init doesn't always reach the window server, so clicking the
+// panel can still activate this app (seen in the first in-game run). Re-applying it after init fixes that.
+panel.styleMask.remove(.nonactivatingPanel)
+panel.styleMask.insert(.nonactivatingPanel)
 panel.isFloatingPanel = true
 panel.hidesOnDeactivate = false
 panel.level = level
@@ -200,7 +204,9 @@ if args.contains("--consume-f1") { register(.f1Test, keyCode: kVK_F1, modifiers:
 
 // MARK: - Environment monitoring (window mode, Spaces, visibility)
 
-// Keep the panel on the left edge of the game window, whichever display it is on.
+// Keep the panel on the left edge of the game window, whichever display it is on, and one window level above
+// the game: Borderless puts the game at level 1000 (= .screenSaver) and Fullscreen captures the display at the
+// shielding level (2147483628), so a fixed level can't stay on top in every mode.
 // CGWindow bounds use a top-left origin on the primary display; AppKit uses bottom-left.
 var lastGameBounds = CGRect.zero
 @MainActor func followGameWindow(_ infos: [[String: Any]]) {
@@ -208,9 +214,19 @@ var lastGameBounds = CGRect.zero
         NSWorkspace.shared.runningApplications
             .filter { $0.bundleIdentifier == "com.riotgames.LeagueofLegends.GameClient" }
             .map(\.processIdentifier))
+    let gameWindows = infos.filter { gamePIDs.contains(($0[kCGWindowOwnerPID as String] as? pid_t) ?? -1) }
+    guard !gameWindows.isEmpty else { return }
+
+    let gameLayer = gameWindows.compactMap { $0[kCGWindowLayer as String] as? Int }.max() ?? 0
+    let wanted = NSWindow.Level(rawValue: max(level.rawValue, gameLayer + 1))
+    if panel.level != wanted {
+        panel.level = wanted
+        panel.orderFrontRegardless()
+        log("game window layer=\(gameLayer) -> panel level=\(wanted.rawValue)")
+    }
+
     guard
-        let window = infos.first(where: { gamePIDs.contains(($0[kCGWindowOwnerPID as String] as? pid_t) ?? -1) }),
-        let dict = window[kCGWindowBounds as String] as? NSDictionary,
+        let dict = gameWindows.first?[kCGWindowBounds as String] as? NSDictionary,
         let bounds = CGRect(dictionaryRepresentation: dict),
         bounds != lastGameBounds
     else { return }
