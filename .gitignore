@@ -25,3 +25,6 @@ Tests/Fixtures/raw/
 *.cer
 *.provisionprofile
 .env
+
+# Spike output (logs, raw API recordings with real Riot IDs)
+Spikes/out/
