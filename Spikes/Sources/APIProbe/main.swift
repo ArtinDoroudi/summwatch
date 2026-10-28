@@ -35,8 +35,10 @@ func loadRiotRoot() async throws -> SecCertificate {
     return cert
 }
 
+// host == "basic" uses plain X.509 chain validation. Apple's SSL policy rejects Riot's leaf ("not standards
+// compliant") because it is valid for 100 years, beyond Apple's 825-day TLS limit; the chain itself is fine.
 func evaluate(_ trust: SecTrust, anchor: SecCertificate, host: String?) -> String {
-    SecTrustSetPolicies(trust, SecPolicyCreateSSL(true, host as CFString?))
+    SecTrustSetPolicies(trust, host == "basic" ? SecPolicyCreateBasicX509() : SecPolicyCreateSSL(true, host as CFString?))
     SecTrustSetAnchorCertificates(trust, [anchor] as CFArray)
     SecTrustSetAnchorCertificatesOnly(trust, true)
     var error: CFError?
@@ -68,12 +70,15 @@ final class RiotTrust: NSObject, URLSessionDelegate {
             {
                 log("leaf subjectAltName: \(values[kSecOIDSubjectAltName as String] ?? "none")")
             }
-            for host in ["127.0.0.1", "localhost", "rclient", nil] as [String?] {
+            for host in ["127.0.0.1", "localhost", "rclient", nil, "basic"] as [String?] {
                 log("trust eval host=\(host ?? "<no hostname check>"): \(evaluate(trust, anchor: anchor, host: host))")
             }
         }
-        // For probing, accept if the chain anchors to Riot's root, regardless of hostname.
-        let ok = evaluate(trust, anchor: anchor, host: nil).hasPrefix("PASS")
+        // Accept only if the chain anchors to Riot's root (basic X.509) and the leaf names 127.0.0.1.
+        let leafNames127 = (SecTrustCopyCertificateChain(trust) as? [SecCertificate])?.first.flatMap {
+            SecCertificateCopyValues($0, [kSecOIDSubjectAltName] as CFArray, nil) as? [String: Any]
+        }.map { "\($0)".contains("127.0.0.1") } ?? false
+        let ok = leafNames127 && evaluate(trust, anchor: anchor, host: "basic").hasPrefix("PASS")
         completionHandler(ok ? .useCredential : .cancelAuthenticationChallenge, ok ? URLCredential(trust: trust) : nil)
     }
 }

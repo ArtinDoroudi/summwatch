@@ -200,6 +200,27 @@ if args.contains("--consume-f1") { register(.f1Test, keyCode: kVK_F1, modifiers:
 
 // MARK: - Environment monitoring (window mode, Spaces, visibility)
 
+// Keep the panel on the left edge of the game window, whichever display it is on.
+// CGWindow bounds use a top-left origin on the primary display; AppKit uses bottom-left.
+var lastGameBounds = CGRect.zero
+@MainActor func followGameWindow(_ infos: [[String: Any]]) {
+    let gamePIDs = Set(
+        NSWorkspace.shared.runningApplications
+            .filter { $0.bundleIdentifier == "com.riotgames.LeagueofLegends.GameClient" }
+            .map(\.processIdentifier))
+    guard
+        let window = infos.first(where: { gamePIDs.contains(($0[kCGWindowOwnerPID as String] as? pid_t) ?? -1) }),
+        let dict = window[kCGWindowBounds as String] as? NSDictionary,
+        let bounds = CGRect(dictionaryRepresentation: dict),
+        bounds != lastGameBounds
+    else { return }
+    lastGameBounds = bounds
+    let primaryHeight = NSScreen.screens.first?.frame.height ?? 0
+    let origin = NSPoint(x: bounds.minX + 20, y: primaryHeight - bounds.midY - panel.frame.height / 2)
+    panel.setFrameOrigin(origin)
+    log("game window at \(bounds) -> moved panel to \(origin) on \(panel.screen?.localizedName ?? "?")")
+}
+
 var lastFrontmost = ""
 var lastLeagueWindows = ""
 var lastVisibility = ""
@@ -221,6 +242,7 @@ let monitorTimer = Timer(timeInterval: 1, repeats: true) { _ in
         lastLeagueWindows = league
         log("league windows on screen -> \(league.isEmpty ? "none" : league)")
     }
+    MainActor.assumeIsolated { followGameWindow(infos) }
     let visibility = "onActiveSpace=\(panel.isOnActiveSpace) visible=\(panel.occlusionState.contains(.visible))"
     if visibility != lastVisibility {
         lastVisibility = visibility
