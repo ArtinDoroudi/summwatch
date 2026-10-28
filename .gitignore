@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+
+# SwiftPM
+.build/
+.swiftpm/
+Package.resolved.bak
+
+# Xcode (if a contributor opens Package.swift in Xcode)
+xcuserdata/
+DerivedData/
+*.xcworkspace/xcuserdata/
+
+# Build artifacts
+/dist/
+*.app
+*.dmg
+*.zip
+
+# Raw (non-anonymized) fixture recordings — only commit anonymized fixtures
+Tests/Fixtures/raw/
+
+# Local signing / notarization material
+*.p12
+*.cer
+*.provisionprofile
+.env
