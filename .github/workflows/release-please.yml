@@ -14,7 +14,7 @@ jobs:
     steps:
       # Opens/updates a release PR from Conventional Commits; merging it tags vX.Y.Z
       # and updates CHANGELOG.md. Building and attaching the app comes in M4.
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
