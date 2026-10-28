@@ -1,0 +1,16 @@
+name: Policy question
+description: Ask whether a feature fits Riot's third-party developer policies.
+labels: [policy]
+body:
+  - type: textarea
+    id: feature
+    attributes:
+      label: Feature
+      description: What would the feature show or do?
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: Relevant policy sources
+      description: Links to Riot policy text, Riot staff statements, or precedent from other apps.
